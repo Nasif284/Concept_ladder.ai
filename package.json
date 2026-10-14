@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.10",
     "@google/genai": "^1.33.0",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/typography": "^0.5.19",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",

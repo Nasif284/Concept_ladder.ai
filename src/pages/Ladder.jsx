@@ -21,7 +21,6 @@ export function Ladder() {
         navigate("/input");
     } else {
         setTopicData(data);
-        // Expand the highest unlocked level that isn't completed, or just the highest unlocked
         if (data.levels.advanced.unlocked) setExpandedLevel("advanced");
         else if (data.levels.beginner.unlocked) setExpandedLevel("beginner");
         else setExpandedLevel("kid");

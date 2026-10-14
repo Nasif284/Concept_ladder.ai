@@ -7,3 +7,18 @@
     @apply font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-white antialiased;
   }
 }
+
+/* Hide Clerk branding, development banners, and profile dropdown footers */
+.cl-userButtonPopoverFooter,
+.cl-developmentBadge,
+.cl-footerPages,
+.cl-footer > *:not(.cl-footerAction),
+.cl-footerAction + div,
+a[href*="clerk.com"] {
+  display: none !important;
+}
+
+.cl-footer {
+  background-image: none !important;
+  background: transparent !important;
+}

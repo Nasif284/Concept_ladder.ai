@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/Button";
 import { useTheme } from "../theme-provider";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
 
 export function Header({ title, showBack, className }) {
   const [copied, setCopied] = useState(false);
@@ -60,7 +61,23 @@ export function Header({ title, showBack, className }) {
             {copied ? 'Copied!' : 'Share'}
         </Button>
         <ThemeToggle />
-        <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 bg-gray-200" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuB-NibvDhgS5-pr7LQi3sRf25riQ_HHqUMa7ymZ6z20syfLWfks-czXBLvOrRO_odSx4FtFu6CAoVjdkWhBat5OBtutS0Jy5g5XwV889DICBn7j9ZtqBVhqmqhewabKi5vrT2LWpfBijGZJTTwnYlg149DJrXzMmAfpOuYwBOtUEU859SQLvicBvfwta0-MXyNi-BiCQch2Q4zz_CqYb7G7DBm13g2cvDJUJZWSW2mcqDrwU_woqEqV_CdrYxJBGb1TrvpO7B5izh5Y")' }}></div>
+        <SignedOut>
+          <SignInButton mode="modal">
+            <Button size="sm" variant="primary">
+              Sign In
+            </Button>
+          </SignInButton>
+        </SignedOut>
+        <SignedIn>
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: "size-9"
+              }
+            }}
+          />
+        </SignedIn>
       </div>
     </header>
   );

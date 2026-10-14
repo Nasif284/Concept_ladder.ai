@@ -37,7 +37,7 @@ export function Home() {
           <div className="flex flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex min-w-72 flex-col gap-2">
               <p className="text-[#111418] dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">
-                Welcome back, {user.name.split(' ')[0]}!
+                Welcome back, {user?.name ? user.name.split(' ')[0] : 'Explorer'}!
               </p>
               <p className="text-[#617289] dark:text-gray-400 text-base font-normal leading-normal">
                 Ready to climb the ladder of knowledge?

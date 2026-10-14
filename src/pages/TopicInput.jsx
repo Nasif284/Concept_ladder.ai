@@ -15,17 +15,19 @@ export function TopicInput() {
   useEffect(() => {
     const query = searchParams.get("q");
     if (query) {
-        setTopic(query);
-        // Auto-generate if query is present
-        handleGenerate(query);
+      setTopic(query);
+      handleGenerate(query);
     }
   }, [searchParams]);
 
-  const handleGenerate = async (topicToGenerate) => {
+  const handleGenerate = async (targetTopic) => {
     if (isLoading) return;
-    const targetTopic = typeof topicToGenerate === 'string' ? topicToGenerate : topic;
-    if (targetTopic && targetTopic.trim()) {
-      const newTopic = await addTopic(targetTopic);
+    // Safely use string argument or fall back to input state
+    const topicToUse = typeof targetTopic === "string" ? targetTopic : topic;
+    const cleanTopic = topicToUse?.trim();
+
+    if (cleanTopic) {
+      const newTopic = await addTopic(cleanTopic);
       if (newTopic) {
         navigate(`/ladder/${newTopic.slug}`);
       }
@@ -34,7 +36,7 @@ export function TopicInput() {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !isLoading) {
-      handleGenerate();
+      handleGenerate(topic);
     }
   };
 
@@ -60,18 +62,18 @@ export function TopicInput() {
               disabled={isLoading}
             />
             {isLoading && (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <motion.div 
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full"
-                    />
-                </div>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full"
+                />
+              </div>
             )}
           </div>
-          <Button 
-            onClick={handleGenerate} 
-            size="lg" 
+          <Button
+            onClick={() => handleGenerate(topic)}
+            size="lg"
             className="px-8 text-base font-semibold shadow-lg shadow-primary/30 min-w-[160px]"
             disabled={isLoading || !topic.trim()}
           >
@@ -79,14 +81,21 @@ export function TopicInput() {
           </Button>
 
           <div className="flex gap-3 pt-12 flex-wrap justify-center items-center">
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-1">Or try a trending topic:</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-1">
+              Or try a trending topic:
+            </p>
             {["AI", "History", "Economics"].map((t) => (
               <button
                 key={t}
-                onClick={() => setTopic(t)}
+                onClick={() => {
+                  setTopic(t);
+                  handleGenerate(t);
+                }}
                 className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-slate-200/80 dark:bg-slate-800 px-4 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors"
               >
-                <p className="text-slate-700 dark:text-slate-300 text-sm font-medium leading-normal">{t}</p>
+                <p className="text-slate-700 dark:text-slate-300 text-sm font-medium leading-normal">
+                  {t}
+                </p>
               </button>
             ))}
           </div>
@@ -94,9 +103,15 @@ export function TopicInput() {
       </main>
       <footer className="flex items-center justify-center py-6 px-10 border-t border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-6 text-sm text-slate-500 dark:text-slate-400">
-          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">About</a>
-          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">Privacy</a>
-          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">Contact</a>
+          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">
+            About
+          </a>
+          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">
+            Privacy
+          </a>
+          <a href="#" className="hover:text-primary dark:hover:text-primary transition-colors">
+            Contact
+          </a>
         </div>
       </footer>
     </div>

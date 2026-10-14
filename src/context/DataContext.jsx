@@ -1,168 +1,304 @@
-import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { storage } from "../lib/storage";
+import { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
+import { useSession, useUser } from "@clerk/clerk-react";
 import { generateTopicContent } from "../lib/generator";
+import { createClerkSupabaseClient } from "../lib/supabase";
 
 const DataContext = createContext({
   topics: [],
-  addTopic: () => {},
+  user: null,
+  addTopic: async () => {},
   getTopic: () => {},
   unlockLevel: () => {},
+  completeLevel: () => {},
+  deleteTopic: () => {},
+  toggleFavorite: () => {},
+  clearAllTopics: async () => {},
   isLoading: false,
 });
 
 export function DataProvider({ children }) {
-  const [data, setData] = useState(() => {
-    const storedData = storage.get();
-    // Deduplicate topics on load
-    const uniqueTopics = [];
-    const seenTitles = new Set();
-    
-    for (const topic of storedData.topics) {
-      const normalizedTitle = topic.title.toLowerCase();
-      if (!seenTitles.has(normalizedTitle)) {
-        seenTitles.add(normalizedTitle);
-        uniqueTopics.push(topic);
-      }
-    }
-    
-    return { ...storedData, topics: uniqueTopics };
-  });
+  const { session, isSignedIn } = useSession();
+  const { user: clerkUser } = useUser();
+
+  const [topics, setTopics] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const processingRef = useRef(new Set());
 
-  // Save to storage whenever data changes
-  useEffect(() => {
-    storage.set(data);
-  }, [data]);
+  // Supabase client dynamically authorized with the active Clerk session JWT
+  const supabase = useMemo(() => {
+    return createClerkSupabaseClient(session);
+  }, [session]);
 
+  // Sync Clerk user profile into Supabase 'profiles' table & load topics
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!isSignedIn || !clerkUser || !session) {
+      setTopics([]);
+      return;
+    }
+
+    async function initUserData() {
+      setIsLoading(true);
+      try {
+        // 1. Sync User Profile into Supabase 'profiles' table
+        const profileData = {
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress || "",
+          full_name: clerkUser.fullName || clerkUser.firstName || "Explorer",
+          avatar_url: clerkUser.imageUrl || "",
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert(profileData, { onConflict: "id" });
+
+        if (profileError && profileError.code !== "PGRST205") {
+          console.warn("[Supabase] Profile sync notice:", profileError.message);
+        }
+
+        // 2. Fetch Topics from Supabase for this user
+        const { data: dbTopics, error: topicsError } = await supabase
+          .from("topics")
+          .select("*")
+          .order("last_accessed", { ascending: false });
+
+        if (topicsError) {
+          if (topicsError.code === "PGRST205") {
+            console.warn(
+              "[Supabase] Tables not found yet. Please run 'supabase/schema.sql' in your Supabase SQL Editor."
+            );
+          } else {
+            console.error("[Supabase] Failed to fetch topics:", topicsError.message);
+          }
+          return;
+        }
+
+        if (!isCancelled && dbTopics) {
+          const formatted = dbTopics.map((row) => ({
+            id: row.id,
+            title: row.title,
+            slug: row.slug,
+            progress: row.progress,
+            isFavorite: row.is_favorite,
+            lastAccessed: row.last_accessed,
+            levels: row.levels,
+          }));
+          setTopics(formatted);
+        }
+      } catch (err) {
+        console.error("[Supabase] Data initialization error:", err);
+      } finally {
+        if (!isCancelled) setIsLoading(false);
+      }
+    }
+
+    initUserData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isSignedIn, clerkUser, session, supabase]);
+
+  // Add Topic: AI generates content -> Persisted directly to Supabase
   const addTopic = async (topicName) => {
-    const normalizedName = topicName.toLowerCase();
-    
-    // Prevent concurrent processing of the same topic
+    const normalizedName = topicName.trim().toLowerCase();
+
     if (processingRef.current.has(normalizedName)) {
-        return data.topics.find(t => t.title.toLowerCase() === normalizedName);
+      return topics.find((t) => t.title.toLowerCase() === normalizedName);
     }
 
     setIsLoading(true);
     processingRef.current.add(normalizedName);
-    
-    try {
-        // Check if topic already exists (case-insensitive)
-        const existingTopic = data.topics.find(t => t.title.toLowerCase() === normalizedName);
-        
-        if (existingTopic) {
-            // Move to top (most recent) and remove ANY other duplicates
-            setData(prev => ({
-                ...prev,
-                topics: [existingTopic, ...prev.topics.filter(t => t.title.toLowerCase() !== normalizedName)]
-            }));
-            return existingTopic;
-        }
 
-        // Simulate network delay for "AI Generation" if using mock, but real AI takes time too
-        // await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        const newTopic = await generateTopicContent(topicName);
-        
-        setData(prev => {
-            // Double check in case it was added while waiting
-            const exists = prev.topics.find(t => t.title.toLowerCase() === normalizedName);
-            if (exists) return prev;
-            
-            return {
-                ...prev,
-                topics: [newTopic, ...prev.topics]
-            };
+    try {
+      const existingTopic = topics.find(
+        (t) => t.title.toLowerCase() === normalizedName
+      );
+
+      if (existingTopic) {
+        setTopics((prev) => [
+          existingTopic,
+          ...prev.filter((t) => t.title.toLowerCase() !== normalizedName),
+        ]);
+        return existingTopic;
+      }
+
+      const newTopic = await generateTopicContent(topicName);
+
+      // Persist to Supabase if authenticated
+      if (isSignedIn && clerkUser) {
+        const { error } = await supabase.from("topics").insert({
+          id: newTopic.id,
+          user_id: clerkUser.id,
+          title: newTopic.title,
+          slug: newTopic.slug,
+          progress: newTopic.progress,
+          is_favorite: newTopic.isFavorite,
+          last_accessed: newTopic.lastAccessed,
+          levels: newTopic.levels,
         });
-        
-        return newTopic;
+
+        if (error) {
+          console.warn("[Supabase] Insert topic error:", error.message);
+        }
+      }
+
+      setTopics((prev) => [newTopic, ...prev]);
+      return newTopic;
     } finally {
-        processingRef.current.delete(normalizedName);
-        setIsLoading(false);
+      processingRef.current.delete(normalizedName);
+      setIsLoading(false);
     }
   };
 
   const getTopic = (identifier) => {
-    return data.topics.find(t => t.id === identifier || t.slug === identifier);
+    return topics.find((t) => t.id === identifier || t.slug === identifier);
   };
 
-  const unlockLevel = (topicId, levelId) => {
-    setData(prev => {
-      const topicIndex = prev.topics.findIndex(t => t.id === topicId);
+  const unlockLevel = async (topicId, levelId) => {
+    setTopics((prev) => {
+      const topicIndex = prev.findIndex((t) => t.id === topicId);
       if (topicIndex === -1) return prev;
 
-      const updatedTopics = [...prev.topics];
+      const updatedTopics = [...prev];
       const topic = { ...updatedTopics[topicIndex] };
-      
-      // Update specific level
+
       if (topic.levels[levelId]) {
         topic.levels[levelId] = { ...topic.levels[levelId], unlocked: true };
       }
-      
-      // Update overall progress label if needed
-      if (levelId === 'beginner' && topic.progress === 'kid') topic.progress = 'beginner';
-      if (levelId === 'advanced' && topic.progress === 'beginner') topic.progress = 'advanced';
-      
-      // Update timestamp
-      topic.lastAccessed = new Date().toISOString();
 
+      if (levelId === "beginner" && topic.progress === "kid") topic.progress = "beginner";
+      if (levelId === "advanced" && topic.progress === "beginner") topic.progress = "advanced";
+
+      topic.lastAccessed = new Date().toISOString();
       updatedTopics[topicIndex] = topic;
-      return { ...prev, topics: updatedTopics };
+
+      if (isSignedIn) {
+        supabase
+          .from("topics")
+          .update({
+            levels: topic.levels,
+            progress: topic.progress,
+            last_accessed: topic.lastAccessed,
+          })
+          .eq("id", topicId)
+          .then(({ error }) => {
+            if (error) console.warn("[Supabase] Unlock level update error:", error.message);
+          });
+      }
+
+      return updatedTopics;
     });
   };
 
-  const completeLevel = (topicId, levelId) => {
-    setData(prev => {
-      const topicIndex = prev.topics.findIndex(t => t.id === topicId);
+  const completeLevel = async (topicId, levelId) => {
+    setTopics((prev) => {
+      const topicIndex = prev.findIndex((t) => t.id === topicId);
       if (topicIndex === -1) return prev;
 
-      const updatedTopics = [...prev.topics];
+      const updatedTopics = [...prev];
       const topic = { ...updatedTopics[topicIndex] };
-      
+
       if (topic.levels[levelId]) {
         topic.levels[levelId] = { ...topic.levels[levelId], completed: true };
       }
 
-      if (levelId === 'advanced') {
-        topic.progress = 'completed';
+      if (levelId === "advanced") {
+        topic.progress = "completed";
       }
 
+      topic.lastAccessed = new Date().toISOString();
       updatedTopics[topicIndex] = topic;
-      return { ...prev, topics: updatedTopics };
+
+      if (isSignedIn) {
+        supabase
+          .from("topics")
+          .update({
+            levels: topic.levels,
+            progress: topic.progress,
+            last_accessed: topic.lastAccessed,
+          })
+          .eq("id", topicId)
+          .then(({ error }) => {
+            if (error) console.warn("[Supabase] Complete level update error:", error.message);
+          });
+      }
+
+      return updatedTopics;
     });
   };
 
-  const deleteTopic = (id) => {
-    setData(prev => ({
-      ...prev,
-      topics: prev.topics.filter(t => t.id !== id)
-    }));
+  const deleteTopic = async (id) => {
+    setTopics((prev) => prev.filter((t) => t.id !== id));
+
+    if (isSignedIn) {
+      const { error } = await supabase.from("topics").delete().eq("id", id);
+      if (error) console.warn("[Supabase] Delete topic error:", error.message);
+    }
   };
 
-  const toggleFavorite = (id) => {
-    setData(prev => {
-      const updatedTopics = prev.topics.map(t => {
+  const toggleFavorite = async (id) => {
+    setTopics((prev) => {
+      let nextFav = false;
+      const updatedTopics = prev.map((t) => {
         if (t.id === id) {
-          return { ...t, isFavorite: !t.isFavorite };
+          nextFav = !t.isFavorite;
+          return { ...t, isFavorite: nextFav };
         }
         return t;
       });
-      return { ...prev, topics: updatedTopics };
+
+      if (isSignedIn) {
+        supabase
+          .from("topics")
+          .update({ is_favorite: nextFav })
+          .eq("id", id)
+          .then(({ error }) => {
+            if (error) console.warn("[Supabase] Toggle favorite error:", error.message);
+          });
+      }
+
+      return updatedTopics;
     });
   };
 
+  const clearAllTopics = async () => {
+    setTopics([]);
+    if (isSignedIn && clerkUser) {
+      const { error } = await supabase
+        .from("topics")
+        .delete()
+        .eq("user_id", clerkUser.id);
+      if (error) console.warn("[Supabase] Clear all topics error:", error.message);
+    }
+  };
+
+  const currentUser = isSignedIn && clerkUser
+    ? {
+        id: clerkUser.id,
+        name: clerkUser.fullName || clerkUser.firstName || "Learner",
+        avatar: clerkUser.imageUrl,
+        email: clerkUser.primaryEmailAddress?.emailAddress,
+      }
+    : { name: "Learner", avatar: null };
+
   return (
-    <DataContext.Provider value={{ 
-      topics: data.topics, 
-      user: data.user,
-      addTopic, 
-      getTopic, 
-      unlockLevel,
-      completeLevel,
-      deleteTopic,
-      toggleFavorite,
-      isLoading 
-    }}>
+    <DataContext.Provider
+      value={{
+        topics,
+        user: currentUser,
+        addTopic,
+        getTopic,
+        unlockLevel,
+        completeLevel,
+        deleteTopic,
+        toggleFavorite,
+        clearAllTopics,
+        isLoading,
+      }}
+    >
       {children}
     </DataContext.Provider>
   );

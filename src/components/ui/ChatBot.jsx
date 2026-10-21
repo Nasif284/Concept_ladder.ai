@@ -58,9 +58,9 @@ export function ChatBot() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+    <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex flex-col items-end gap-4">
       {isOpen && (
-        <Card className="w-80 sm:w-96 h-[500px] flex flex-col shadow-2xl border-primary/20 animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <Card className="w-[calc(100vw-2rem)] sm:w-96 max-w-sm h-[480px] max-h-[75vh] flex flex-col shadow-2xl border-primary/20 animate-in slide-in-from-bottom-10 fade-in duration-300">
           {/* Header */}
           <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-primary/5 rounded-t-xl flex justify-between items-center">
             <div className="flex items-center gap-2">

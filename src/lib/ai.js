@@ -85,11 +85,12 @@ function parseGeminiJSON(rawText) {
 
 export const generateLadderContent = async (topic, retries = 1) => {
   if (!aiClient) {
-    console.warn("Gemini API Key is missing or invalid. Using fallback placeholder.");
-    return null;
+    throw new Error("Gemini API key is not configured. Please check your environment variables.");
   }
 
   const userPrompt = `Please generate a comprehensive Concept Ladder curriculum for the topic: "${topic}".`;
+
+  let lastError = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -120,17 +121,22 @@ export const generateLadderContent = async (topic, retries = 1) => {
 
       throw new Error("Gemini response missing one or more required ladder levels.");
     } catch (error) {
+      lastError = error;
       console.warn(`[Gemini API Attempt ${attempt + 1}/${retries + 1} Failed]:`, error.message);
       if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      } else {
-        console.error("All Gemini generation attempts failed:", error);
-        return null;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
 
-  return null;
+  const msg = lastError?.message || "";
+  if (msg.includes("429") || msg.includes("quota") || msg.includes("Resource has been exhausted")) {
+    throw new Error("AI rate limit reached. The free Gemini tier has a per-minute limit. Please wait 60 seconds and try again.");
+  }
+  if (msg.includes("API key not valid") || msg.includes("API_KEY_INVALID")) {
+    throw new Error("Invalid Gemini API key. Please check VITE_GEMINI_API_KEY in your .env file.");
+  }
+  throw new Error(`AI generation failed: ${lastError?.message || "Please try again."}`);
 };
 
 

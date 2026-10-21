@@ -11,6 +11,7 @@ export function TopicInput() {
   const [searchParams] = useSearchParams();
   const { addTopic, isLoading } = useData();
   const [topic, setTopic] = useState("");
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     const query = searchParams.get("q");
@@ -22,14 +23,20 @@ export function TopicInput() {
 
   const handleGenerate = async (targetTopic) => {
     if (isLoading) return;
-    // Safely use string argument or fall back to input state
+    setErrorMessage(null);
     const topicToUse = typeof targetTopic === "string" ? targetTopic : topic;
     const cleanTopic = topicToUse?.trim();
 
     if (cleanTopic) {
-      const newTopic = await addTopic(cleanTopic);
-      if (newTopic) {
-        navigate(`/ladder/${newTopic.slug}`);
+      try {
+        const newTopic = await addTopic(cleanTopic);
+        if (newTopic) {
+          navigate(`/ladder/${newTopic.slug}`);
+        }
+      } catch (err) {
+        setErrorMessage(
+          err?.message || "Failed to generate ladder curriculum. Please try again."
+        );
       }
     }
   };
@@ -51,12 +58,40 @@ export function TopicInput() {
           <p className="text-slate-600 dark:text-slate-400 text-lg font-normal leading-normal pb-8 pt-1 px-4">
             What concept do you want to explore?
           </p>
+
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-lg mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-sm flex items-start gap-3 text-left"
+            >
+              <span className="material-symbols-outlined text-red-500 shrink-0 text-xl">
+                error
+              </span>
+              <div className="flex-1">
+                <p className="font-semibold text-red-800 dark:text-red-200">
+                  Generation Failed
+                </p>
+                <p className="mt-1 leading-relaxed">{errorMessage}</p>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="text-red-400 hover:text-red-600 dark:hover:text-red-200"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </motion.div>
+          )}
+
           <div className="w-full max-w-lg mb-6 relative">
             <Input
               className="h-14 text-base shadow-sm pr-12"
               placeholder="e.g., Quantum Computing, Photosynthesis, Blockchain..."
               value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              onChange={(e) => {
+                setTopic(e.target.value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               onKeyDown={handleKeyDown}
               autoFocus
               disabled={isLoading}

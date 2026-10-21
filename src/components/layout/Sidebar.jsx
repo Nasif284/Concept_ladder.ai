@@ -1,8 +1,18 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useUser, SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 import { cn } from "../../lib/utils";
 
+const NAV_ITEMS = [
+  { to: "/", label: "Home", icon: "home" },
+  { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { to: "/topics", label: "My Topics", icon: "menu_book" },
+  { to: "/favorites", label: "Favorites", icon: "favorite" },
+  { to: "/settings", label: "Settings", icon: "settings" },
+];
+
 export function Sidebar({ className }) {
+  const location = useLocation();
+
   return (
     <aside className={cn("flex h-screen w-64 flex-col border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-background-dark sticky top-0", className)}>
       <div className="flex flex-col gap-4">
@@ -15,26 +25,33 @@ export function Sidebar({ className }) {
           </div>
         </div>
         <div className="flex flex-col gap-2">
-          <Link to="/" className="flex items-center gap-3 rounded-lg bg-primary/10 dark:bg-primary/20 px-3 py-2">
-            <span className="material-symbols-outlined text-primary dark:text-white filled">home</span>
-            <p className="text-primary dark:text-white text-sm font-medium leading-normal">Home</p>
-          </Link>
-          <Link to="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/10">
-            <span className="material-symbols-outlined text-[#111418] dark:text-gray-300">dashboard</span>
-            <p className="text-[#111418] dark:text-gray-300 text-sm font-medium leading-normal">Dashboard</p>
-          </Link>
-          <Link to="/topics" className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/10">
-            <span className="material-symbols-outlined text-[#111418] dark:text-gray-300">menu_book</span>
-            <p className="text-[#111418] dark:text-gray-300 text-sm font-medium leading-normal">My Topics</p>
-          </Link>
-          <Link to="/favorites" className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/10">
-            <span className="material-symbols-outlined text-[#111418] dark:text-gray-300">favorite</span>
-            <p className="text-[#111418] dark:text-gray-300 text-sm font-medium leading-normal">Favorites</p>
-          </Link>
-          <Link to="/settings" className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/10">
-            <span className="material-symbols-outlined text-[#111418] dark:text-gray-300">settings</span>
-            <p className="text-[#111418] dark:text-gray-300 text-sm font-medium leading-normal">Settings</p>
-          </Link>
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname === item.to;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                  isActive
+                    ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-white font-medium"
+                    : "hover:bg-gray-100 dark:hover:bg-white/10 text-[#111418] dark:text-gray-300"
+                )}
+              >
+                <span
+                  className={cn(
+                    "material-symbols-outlined",
+                    isActive
+                      ? "text-primary dark:text-white filled"
+                      : "text-[#111418] dark:text-gray-300"
+                  )}
+                >
+                  {item.icon}
+                </span>
+                <p className="text-sm font-medium leading-normal">{item.label}</p>
+              </Link>
+            );
+          })}
         </div>
       </div>
       <div className="mt-auto flex flex-col gap-1 border-t border-gray-100 dark:border-gray-800 pt-3">
